@@ -454,9 +454,22 @@ export default function Assessment({ firstName = '', lastName = '', dob = '', st
   // Signal GuidingCare that the assessment was completed
   useEffect(() => {
     if (submitted) {
+      const fullQA = buildPartialQA(PAGES, answers)
+      const payload = JSON.stringify({ assessmentType, qa: fullQA })
+      localStorage.setItem('assessment-completed-qa', payload)
+      if (storageKey) localStorage.setItem('assessment-completed-qa-' + storageKey, payload)
+      if (storageKey) localStorage.removeItem('assessment-partial-qa-' + storageKey)
+      if (storageKey) localStorage.removeItem('assessment-live-qa-' + storageKey)
       localStorage.removeItem('assessment-partial-qa')
       localStorage.setItem('hra-completed', 'jane-doe')
       localStorage.setItem('assessment-completed', assessmentType)
+      localStorage.setItem('assessment-completed-ts', Date.now().toString())
+      // Notify gc-assessments cwf.html via BroadcastChannel (same-origin, works across iframes)
+      try {
+        const bc = new BroadcastChannel('gc_assessment')
+        bc.postMessage({ type: 'ASSESSMENT_COMPLETED', assessmentType })
+        bc.close()
+      } catch (_) {}
       if (window.opener) {
         try { window.opener.postMessage({ type: 'ASSESSMENT_COMPLETED', assessmentType }, '*') } catch (_) {}
       }
@@ -467,7 +480,10 @@ export default function Assessment({ firstName = '', lastName = '', dob = '', st
   useEffect(() => {
     if (savedClosed) {
       const partialQA = buildPartialQA(PAGES, answers)
-      localStorage.setItem('assessment-partial-qa', JSON.stringify({ assessmentType, qa: partialQA }))
+      const payload = JSON.stringify({ assessmentType, qa: partialQA })
+      localStorage.setItem('assessment-partial-qa', payload)
+      if (storageKey) localStorage.setItem('assessment-partial-qa-' + storageKey, payload)
+      if (storageKey) localStorage.removeItem('assessment-live-qa-' + storageKey)
       localStorage.setItem('assessment-saved', assessmentType)
       if (window.opener) {
         try { window.opener.postMessage({ type: 'ASSESSMENT_SAVED', assessmentType }, '*') } catch (_) {}
@@ -479,6 +495,10 @@ export default function Assessment({ firstName = '', lastName = '', dob = '', st
   useEffect(() => {
     if (!storageKey) return
     localStorage.setItem(storageKey, JSON.stringify({ answers, currentPage }))
+    const liveQA = buildPartialQA(PAGES, answers)
+    if (liveQA.length > 0) {
+      localStorage.setItem('assessment-live-qa-' + storageKey, JSON.stringify({ assessmentType, qa: liveQA }))
+    }
   }, [answers, currentPage, storageKey])
 
   // On restore: scroll first unanswered question to top of viewport (just below sticky header)
